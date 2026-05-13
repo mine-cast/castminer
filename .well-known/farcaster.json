@@ -1,0 +1,28 @@
+{
+  "name": "CastMiner",
+  "short_name": "CastMiner",
+  "description": "Browser-based mining on Base network. Mine $CAST tokens directly from Farcaster.",
+  "version": "1.0.0",
+  "homeUrl": "https://YOUR-DOMAIN-HERE",
+  "iconUrl": "https://YOUR-DOMAIN-HERE/icon.png",
+  "splashImageUrl": "https://YOUR-DOMAIN-HERE/splash.png",
+  "splashBackgroundColor": "#0A0E1A",
+  "frame": {
+    "version": "next",
+    "name": "CastMiner",
+    "iconUrl": "https://YOUR-DOMAIN-HERE/icon.png",
+    "homeUrl": "https://YOUR-DOMAIN-HERE",
+    "splashImageUrl": "https://YOUR-DOMAIN-HERE/splash.png",
+    "splashBackgroundColor": "#0A0E1A"
+  },
+  "triggers": [
+    {
+      "type": "cast_action",
+      "id": "mine",
+      "name": "Start Mining",
+      "description": "Open CastMiner and start mining $CAST"
+    }
+  ],
+  "requiredChains": ["eip155:8453"],
+  "permissions": ["wallet"]
+}

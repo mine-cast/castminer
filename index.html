@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="color-scheme" content="dark light" />
+  <title>CastMiner — Browser Mining on Base</title>
+
+  <!-- Farcaster Frame meta tags -->
+  <meta name="fc:frame" content="vNext" />
+  <meta name="fc:frame:image" content="" />
+  <meta name="fc:frame:button:1" content="Open CastMiner" />
+  <meta name="fc:frame:button:1:action" content="launch_frame" />
+  <meta property="og:title" content="CastMiner — Browser Mining on Base" />
+  <meta property="og:description" content="Mine $CAST tokens directly from Farcaster. Powered by Base network." />
+  <meta property="og:type" content="website" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@farcaster/frame-sdk@latest/dist/index.min.js"></script>
+
+  <style>
+    :root[data-theme="dark"] {
+      --primary: #0052FF;
+      --primary-glow: rgba(0, 82, 255, 0.4);
+      --accent: #8A63D2;
+      --accent-glow: rgba(138, 99, 210, 0.3);
+      --success: #00C853;
+      --warning: #FFB300;
+      --danger: #FF3D71;
+      --bg: #0A0E1A;
+      --bg-secondary: #111827;
+      --surface: rgba(255, 255, 255, 0.06);
+      --surface-strong: rgba(255, 255, 255, 0.09);
+      --text: #F0F2F5;
+      --text-secondary: #8B95A5;
+      --text-muted: #4A5568;
+      --card-bg: rgba(17, 24, 39, 0.7);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --nav-bg: rgba(10, 14, 26, 0.95);
+      --outer-bg: #050810;
+      --glow-1: rgba(0, 82, 255, 0.08);
+      --particle-color: rgba(255, 255, 255, 0.12);
+      --shadow-strong: rgba(0, 0, 0, 0.4);
+    }
+
+    :root[data-theme="light"] {
+      --primary: #0052FF;
+      --primary-glow: rgba(0, 82, 255, 0.4);
+      --accent: #8A63D2;
+      --accent-glow: rgba(138, 99, 210, 0.3);
+      --success: #00C853;
+      --warning: #FFB300;
+      --danger: #FF3D71;
+      --bg: #F5F7FA;
+      --bg-secondary: #FFFFFF;
+      --surface: rgba(0, 0, 0, 0.03);
+      --surface-strong: rgba(0, 0, 0, 0.05);
+      --text: #111827;
+      --text-secondary: #6B7280;
+      --text-muted: #9CA3AF;
+      --card-bg: rgba(255, 255, 255, 0.85);
+      --card-border: rgba(0, 0, 0, 0.06);
+      --nav-bg: rgba(255, 255, 255, 0.95);
+      --outer-bg: #E8EBF0;
+      --glow-1: rgba(0, 82, 255, 0.05);
+      --particle-color: rgba(0, 0, 0, 0.12);
+      --shadow-strong: rgba(0, 0, 0, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *::-webkit-scrollbar { width: 0; height: 0; }
+    *::selection { background: var(--primary-glow); color: var(--text); }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--outer-bg);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Loading screen */
+    .loading-screen {
+      position: fixed; inset: 0;
+      z-index: 10000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 18px;
+      background: var(--bg);
+      transition: opacity 0.4s ease;
+    }
+    .loading-screen.hidden { opacity: 0; pointer-events: none; }
+
+    .loading-spinner {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      border: 3px solid var(--surface-strong);
+      border-top-color: var(--primary);
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-text {
+      font-family: 'Outfit', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Gate screen */
+    .gate-screen {
+      position: fixed; inset: 0;
+      z-index: 9000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      background: var(--bg);
+      overflow-y: auto;
+    }
+    .gate-screen[hidden] { display: none; }
+
+    .gate-content {
+      max-width: 392px;
+      width: 100%;
+      text-align: center;
+      padding: 32px 8px;
+    }
+
+    .gate-icon {
+      width: 120px; height: 120px;
+      margin: 0 auto 24px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 24px 56px -16px var(--primary-glow), 0 12px 28px -10px var(--accent-glow);
+      position: relative;
+      overflow: hidden;
+    }
+    .gate-icon::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.25), transparent 60%);
+      pointer-events: none;
+    }
+    .gate-icon svg { width: 56px; height: 56px; color: #fff; z-index: 1; }
+
+    .gate-logo {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 36px;
+      line-height: 1.1;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .gate-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      max-width: 320px;
+      margin: 0 auto 26px;
+    }
+
+    .gate-chips {
+      display: flex; gap: 8px;
+      justify-content: center;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    .gate-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px;
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.3px;
+    }
+    .gate-chip svg { width: 14px; height: 14px; color: var(--primary); }
+
+    .gate-cta {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 320px;
+      padding: 15px 24px;
+      background: linear-gradient(135deg, var(--accent), #6944A8);
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.4px;
+      border-radius: 14px;
+      text-decoration: none;
+      box-shadow: 0 16px 40px -16px var(--accent-glow);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .gate-cta:hover { transform: translateY(-1px); box-shadow: 0 20px 48px -18px var(--accent-glow); }
+    .gate-cta:active { transform: scale(0.98); }
+    .gate-cta svg { width: 16px; height: 16px; }
+
+    .gate-note {
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      max-width: 320px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Background particles */
+    .particles {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .particle {
+      position: absolute;
+      font-family: 'Outfit', monospace;
+      color: var(--particle-color);
+      opacity: 0.12;
+      white-space: nowrap;
+      animation: floatUp linear infinite;
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(100vh); opacity: 0; }
+      10% { opacity: 0.12; }
+      90% { opacity: 0.12; }
+      100% { transform: translateY(-20vh); opacity: 0; }
+    }
+
+    /* App container */
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 424px;
+      margin: 0 auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 60px var(--shadow-strong);
+    }
+    .app[hidden] { display: none; }
+
+    @media (min-width: 425px) {
+      body { background: var(--outer-bg); }
+      .app { border-left: 1px solid var(--card-border); border-right: 1px solid var(--card-border); }
+    }
+
+    /* Status bar */
+    .status-bar {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 14px 16px 10px;
+      gap: 8px;
+    }
+    .status-left {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 0.3px;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.6);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.6); }
+      50% { box-shadow: 0 0 0 6px rgba(0, 200, 83, 0); }
+    }
+
+    .status-center {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.3px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .status-right { display: flex; justify-content: flex-end; }
+
+    .theme-toggle {
+      position: relative;
+      width: 40px; height: 22px;
+      border-radius: 999px;
+      background: var(--surface-strong);
+      border: 1px solid var(--card-border);
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    .theme-thumb {
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--primary);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+    }
+    :root[data-theme="light"] .theme-thumb {
+      transform: translateX(18px);
+      background: var(--warning);
+    }
+    .theme-thumb svg { width: 10px; height: 10px; }
+    .theme-thumb .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-thumb .icon-sun { display: block; }
+    :root[data-theme="light"] .theme-thumb .icon-moon { display: none; }
+
+    /* User bar */
+    .user-bar {
+      display: none;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px 12px;
+      gap: 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .user-bar.visible { display: flex; }
+
+    .user-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .user-avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      flex: 0 0 auto;
+      background-size: cover; background-position: center;
+      box-shadow: 0 2px 10px var(--primary-glow);
+    }
+    .user-meta { min-width: 0; }
+    .user-name {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+    }
+    .user-handle {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .user-wallet {
+      font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 10px;
+      padding: 5px 9px;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .user-wallet:hover { background: var(--surface-strong); color: var(--text); }
+    .user-wallet.connected { color: var(--text); border-color: var(--primary-glow); }
+
+    /* Content */
+    .content {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px 16px 100px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; animation: fadeSlideIn 0.35s ease; }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      text-transform: uppercase;
+    }
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 14px;
+      letter-spacing: -0.3px;
+    }
+
+    /* Mining status pill */
+    .mining-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.4px;
+      background: rgba(255, 61, 113, 0.12);
+      color: var(--danger);
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+    .mining-status .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+    .mining-status.active {
+      background: rgba(0, 200, 83, 0.12);
+      color: var(--success);
+    }
+    .mining-status.active .dot {
+      background: var(--success);
+      animation: pulse-dot-green 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot-green {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.6); }
+      50% { box-shadow: 0 0 0 6px rgba(0, 200, 83, 0); }
+    }
+
+    .status-wrap { text-align: center; margin: 4px 0 18px; }
+
+    /* Hashrate display */
+    .hashrate-wrap { text-align: center; margin-bottom: 28px; }
+    .hashrate-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 42px;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -1px;
+    }
+    .hashrate-label {
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      letter-spacing: 0.3px;
+    }
+
+    /* Mine button */
+    .mine-btn-wrap {
+      position: relative;
+      width: 240px; height: 240px;
+      margin: 8px auto 28px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mine-btn-rings::before,
+    .mine-btn-rings::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 1px solid var(--primary-glow);
+      pointer-events: none;
+    }
+    .mine-btn-rings::before { width: 210px; height: 210px; opacity: 0.7; }
+    .mine-btn-rings::after { width: 240px; height: 240px; opacity: 0.35; }
+
+    .mine-btn {
+      position: relative;
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #0052FF, #8A63D2);
+      color: #fff;
+      cursor: pointer;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      box-shadow: 0 14px 40px -10px var(--primary-glow), 0 6px 16px -8px var(--accent-glow);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .mine-btn:active { transform: scale(0.95); }
+    .mine-btn .icon { width: 36px; height: 36px; transition: transform 0.3s ease; }
+    .mine-btn .label {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 1.5px;
+    }
+    .mine-btn .sublabel {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 10px;
+      opacity: 0.7;
+      letter-spacing: 1px;
+    }
+    .mine-btn.active {
+      animation: btnPulse 2s ease-in-out infinite;
+    }
+    .mine-btn.active .icon {
+      animation: spinSlow 3s linear infinite;
+    }
+    @keyframes btnPulse {
+      0%, 100% { box-shadow: 0 14px 40px -10px var(--primary-glow), 0 6px 16px -8px var(--accent-glow); }
+      50% { box-shadow: 0 18px 56px -10px var(--primary-glow), 0 10px 28px -8px var(--accent-glow); }
+    }
+    @keyframes spinSlow { to { transform: rotate(360deg); } }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .stat-label {
+      font-family: 'Outfit', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--text);
+      line-height: 1.1;
+      margin-bottom: 4px;
+      letter-spacing: -0.3px;
+    }
+    .stat-value.primary { color: var(--primary); }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.success { color: var(--success); }
+    .stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+
+    /* Network stats */
+    .network-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .network-row:last-child { border-bottom: none; }
+    .network-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      letter-spacing: 0.3px;
+    }
+    .network-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .network-value.success { color: var(--success); }
+
+    /* Pool page hero */
+    .pool-hero { text-align: center; padding: 8px 0 20px; }
+    .pool-hero-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 48px;
+      line-height: 1;
+      color: var(--primary);
+      letter-spacing: -1px;
+    }
+    .pool-hero-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    /* Progress bar */
+    .progress-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .progress-label { color: var(--text-secondary); }
+    .progress-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--surface);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      border-radius: 999px;
+      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Block list */
+    .block-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .block-item:last-child { border-bottom: none; }
+    .block-icon {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      flex: 0 0 auto;
+      color: #fff;
+    }
+    .block-icon svg { width: 18px; height: 18px; }
+    .block-meta { flex: 1; min-width: 0; }
+    .block-num {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .block-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .block-reward {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--success);
+    }
+
+    /* Leaderboard */
+    .leaderboard-header,
+    .leaderboard-row {
+      display: grid;
+      grid-template-columns: 36px 1fr 88px 64px;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .leaderboard-row:last-child { border-bottom: none; }
+    .leaderboard-header {
+      font-family: 'Outfit', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .lb-rank {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: left;
+    }
+    .lb-rank.gold { color: #FFD700; }
+    .lb-rank.silver { color: #C0C0C0; }
+    .lb-rank.bronze { color: #CD7F32; }
+    .lb-addr {
+      font-family: 'SFMono-Regular', Menlo, monospace;
+      font-size: 12px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lb-tokens {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--accent);
+      text-align: right;
+    }
+    .lb-hash {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: right;
+    }
+    .lb-th-rank,
+    .lb-th-tokens,
+    .lb-th-hash { text-align: right; }
+    .lb-th-rank { text-align: left; }
+    .leaderboard-row.current {
+      background: var(--glow-1);
+      border-radius: 8px;
+      margin: 2px -4px;
+      padding-left: 12px; padding-right: 12px;
+      border-bottom-color: transparent;
+    }
+
+    .your-rank-card { text-align: center; padding: 18px; margin-top: 12px; }
+    .your-rank-num {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 32px;
+      color: var(--accent);
+      line-height: 1;
+      margin-top: 4px;
+    }
+    .your-rank-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Claim page */
+    .claim-hero { text-align: center; padding: 12px 0 20px; }
+    .claim-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 44px;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -1px;
+    }
+    .claim-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+    .base-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 12px;
+      padding: 5px 12px;
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+    }
+    .base-badge .base-logo {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #fff;
+      font-size: 8px;
+    }
+
+    .claim-btn {
+      width: 100%;
+      padding: 16px;
+      border-radius: 14px;
+      border: none;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px;
+      box-shadow: 0 12px 32px -10px var(--primary-glow), 0 6px 16px -10px var(--accent-glow);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+      margin-bottom: 18px;
+    }
+    .claim-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 48px -12px var(--primary-glow), 0 10px 28px -10px var(--accent-glow);
+    }
+    .claim-btn:active { transform: scale(0.98); }
+    .claim-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .claim-btn .spinner {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+    }
+    .claim-btn svg { width: 20px; height: 20px; }
+
+    /* How it works */
+    .how-step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 12px;
+      padding-bottom: 16px;
+      position: relative;
+    }
+    .how-step:last-child { padding-bottom: 0; }
+    .how-step:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 13px; top: 32px; bottom: 0;
+      width: 2px;
+      background: var(--surface-strong);
+    }
+    .how-num {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 2px solid var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--primary);
+      flex: 0 0 auto;
+      background: var(--bg);
+      position: relative;
+      z-index: 1;
+    }
+    .how-title {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .how-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Claim history */
+    .claim-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .claim-row:last-child { border-bottom: none; }
+    .claim-amount {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--success);
+    }
+    .claim-date {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .claim-badge {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(0, 200, 83, 0.12);
+      color: var(--success);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 10px;
+    }
+
+    /* Bottom nav */
+    .bottom-nav {
+      position: sticky;
+      bottom: 0;
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: var(--nav-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--card-border);
+      padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+      z-index: 50;
+    }
+    .nav-item {
+      position: relative;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 4px;
+      padding: 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: color 0.2s ease;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0.3px;
+    }
+    .nav-item svg { width: 22px; height: 22px; }
+    .nav-item.active { color: var(--primary); }
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      top: -10px; left: 50%;
+      width: 20px; height: 3px;
+      background: var(--primary);
+      border-radius: 0 0 3px 3px;
+      transform: translateX(-50%);
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading screen -->
+  <div id="loadingScreen" class="loading-screen">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Connecting to Farcaster...</p>
+  </div>
+
+  <!-- Gate screen for non-Farcaster visitors -->
+  <div id="gateScreen" class="gate-screen" hidden>
+    <div class="gate-content">
+      <div class="gate-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M14.5 4.5l-9 9 4 4 9-9-4-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,255,255,0.18)"/>
+          <path d="M15 4l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M5 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M3 21l4-2-2-2-2 4z" fill="currentColor"/>
+        </svg>
+      </div>
+      <h1 class="gate-logo">CastMiner</h1>
+      <p class="gate-subtitle">Browser-based mining on Base network. Exclusively available inside Farcaster.</p>
+
+      <div class="gate-chips">
+        <span class="gate-chip">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 4.5l-9 9 4 4 9-9-4-4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          Mine
+        </span>
+        <span class="gate-chip">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Earn
+        </span>
+        <span class="gate-chip">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M15 12h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          Claim
+        </span>
+      </div>
+
+      <a class="gate-cta" href="https://warpcast.com" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 5l10 7-10 7V5z" fill="currentColor"/></svg>
+        Open in Farcaster
+      </a>
+      <p class="gate-note">Install Warpcast or any Farcaster client to start mining $CAST tokens on Base network.</p>
+    </div>
+  </div>
+
+  <!-- Background particles -->
+  <div class="particles" id="particles" aria-hidden="true"></div>
+
+  <!-- App container -->
+  <div id="app" class="app" hidden>
+    <header class="status-bar">
+      <div class="status-left">
+        <span class="status-dot"></span>
+        <span class="status-text">Connected to Base</span>
+      </div>
+      <div class="status-center">CastMiner</div>
+      <div class="status-right">
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+          <span class="theme-thumb">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6 6 0 0 0 10.5 10.5z" fill="currentColor"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+        </button>
+      </div>
+    </header>
+
+    <div id="userBar" class="user-bar">
+      <div class="user-info">
+        <div class="user-avatar" id="userAvatar"></div>
+        <div class="user-meta">
+          <div class="user-name" id="userName">—</div>
+          <div class="user-handle" id="userHandle">—</div>
+        </div>
+      </div>
+      <button class="user-wallet" id="userWallet">Connect</button>
+    </div>
+
+    <main class="content" id="content">
+      <!-- Page: Mine -->
+      <section class="page active" data-page="mine">
+        <div class="status-wrap">
+          <div id="miningStatus" class="mining-status">
+            <span class="dot"></span>
+            <span class="text">Inactive</span>
+          </div>
+        </div>
+
+        <div class="hashrate-wrap">
+          <div id="hashrateValue" class="hashrate-value">0.00</div>
+          <div class="hashrate-label">MH/s Hashrate</div>
+        </div>
+
+        <div class="mine-btn-wrap">
+          <div class="mine-btn-rings"></div>
+          <button class="mine-btn" id="mineBtn">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M14.5 4.5l-9 9 4 4 9-9-4-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,255,255,0.18)"/>
+              <path d="M15 4l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M5 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M3 21l4-2-2-2-2 4z" fill="currentColor"/>
+            </svg>
+            <span class="label" id="mineBtnLabel">START</span>
+            <span class="sublabel" id="mineBtnSubLabel">MINING</span>
+          </button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Earned</div>
+            <div class="stat-value primary" id="earnedValue">0.0000</div>
+            <div class="stat-sub">$CAST Tokens</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Session</div>
+            <div class="stat-value accent" id="sessionTime">00:00:00</div>
+            <div class="stat-sub">Duration</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Shares</div>
+            <div class="stat-value success" id="sharesValue">0</div>
+            <div class="stat-sub">Accepted</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Efficiency</div>
+            <div class="stat-value" id="effValue">0%</div>
+            <div class="stat-sub">Rate</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Network Stats</div>
+          <div class="network-row">
+            <span class="network-label">Total Hashrate</span>
+            <span class="network-value" id="netHashrate">842.5 GH/s</span>
+          </div>
+          <div class="network-row">
+            <span class="network-label">Difficulty</span>
+            <span class="network-value" id="netDifficulty">14,205,381</span>
+          </div>
+          <div class="network-row">
+            <span class="network-label">Block Height</span>
+            <span class="network-value" id="netHeight">19,847,632</span>
+          </div>
+          <div class="network-row">
+            <span class="network-label">Block Reward</span>
+            <span class="network-value success">50 $CAST</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Page: Pool -->
+      <section class="page" data-page="pool">
+        <h2 class="section-title">Pool Overview</h2>
+
+        <div class="pool-hero">
+          <div class="pool-hero-value" id="poolMiners">1,247</div>
+          <div class="pool-hero-label">Miners Online</div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Pool Hashrate</div>
+            <div class="stat-value primary" id="poolHashrate">342.8</div>
+            <div class="stat-sub">GH/s</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Blocks Found</div>
+            <div class="stat-value accent">2,841</div>
+            <div class="stat-sub">Last 24h</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Avg. Block Time</div>
+            <div class="stat-value">12.4s</div>
+            <div class="stat-sub">Target: 12s</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pool Fee</div>
+            <div class="stat-value">1.5%</div>
+            <div class="stat-sub">PPLNS</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Your Contribution</div>
+          <div class="progress-row">
+            <span class="progress-label">Share of Pool</span>
+            <span class="progress-value" id="shareValue">0.00%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="shareFill"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Recent Blocks</div>
+          <div class="block-item">
+            <div class="block-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg></div>
+            <div class="block-meta">
+              <div class="block-num">#19,847,631</div>
+              <div class="block-time">2 min ago</div>
+            </div>
+            <div class="block-reward">+50 $CAST</div>
+          </div>
+          <div class="block-item">
+            <div class="block-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg></div>
+            <div class="block-meta">
+              <div class="block-num">#19,847,630</div>
+              <div class="block-time">14 min ago</div>
+            </div>
+            <div class="block-reward">+50 $CAST</div>
+          </div>
+          <div class="block-item">
+            <div class="block-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg></div>
+            <div class="block-meta">
+              <div class="block-num">#19,847,629</div>
+              <div class="block-time">28 min ago</div>
+            </div>
+            <div class="block-reward">+50 $CAST</div>
+          </div>
+          <div class="block-item">
+            <div class="block-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg></div>
+            <div class="block-meta">
+              <div class="block-num">#19,847,628</div>
+              <div class="block-time">41 min ago</div>
+            </div>
+            <div class="block-reward">+50 $CAST</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Page: Leaderboard -->
+      <section class="page" data-page="leaderboard">
+        <h2 class="section-title">Top Miners</h2>
+
+        <div class="card" style="padding: 8px 12px;">
+          <div class="leaderboard-header">
+            <span class="lb-th-rank">#</span>
+            <span>Miner</span>
+            <span class="lb-th-tokens">Mined</span>
+            <span class="lb-th-hash">Hash</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank gold">1</span>
+            <span class="lb-addr">0x3a8F...c2dE</span>
+            <span class="lb-tokens">14,820</span>
+            <span class="lb-hash">1.2 GH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank silver">2</span>
+            <span class="lb-addr">0xb12D...9f4A</span>
+            <span class="lb-tokens">12,340</span>
+            <span class="lb-hash">980 MH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank bronze">3</span>
+            <span class="lb-addr">0x7eC1...d38B</span>
+            <span class="lb-tokens">9,152</span>
+            <span class="lb-hash">740 MH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank">4</span>
+            <span class="lb-addr">0x91fA...27eC</span>
+            <span class="lb-tokens">7,841</span>
+            <span class="lb-hash">520 MH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank">5</span>
+            <span class="lb-addr">0xdE43...81bF</span>
+            <span class="lb-tokens">6,290</span>
+            <span class="lb-hash">410 MH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank">6</span>
+            <span class="lb-addr">0x22aB...f5D1</span>
+            <span class="lb-tokens">5,120</span>
+            <span class="lb-hash">380 MH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank">7</span>
+            <span class="lb-addr">0xC8f2...4a9E</span>
+            <span class="lb-tokens">4,310</span>
+            <span class="lb-hash">290 MH</span>
+          </div>
+          <div class="leaderboard-row current" id="userRankRow">
+            <span class="lb-rank">8</span>
+            <span class="lb-addr" id="userRankAddr">0x5Fe1...a3B7</span>
+            <span class="lb-tokens" id="userRankTokens">0</span>
+            <span class="lb-hash" id="userRankHash">0 MH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank">9</span>
+            <span class="lb-addr">0xA4d8...c72F</span>
+            <span class="lb-tokens">2,840</span>
+            <span class="lb-hash">180 MH</span>
+          </div>
+          <div class="leaderboard-row">
+            <span class="lb-rank">10</span>
+            <span class="lb-addr">0x6bE9...1dA4</span>
+            <span class="lb-tokens">2,105</span>
+            <span class="lb-hash">120 MH</span>
+          </div>
+        </div>
+
+        <div class="card your-rank-card">
+          <div class="stat-label">Your Rank</div>
+          <div class="your-rank-num">#8</div>
+          <div class="your-rank-sub">of 1,247 miners</div>
+        </div>
+      </section>
+
+      <!-- Page: Claim -->
+      <section class="page" data-page="claim">
+        <h2 class="section-title">Claim Rewards</h2>
+
+        <div class="claim-hero">
+          <div class="claim-value" id="claimValue">0.000</div>
+          <div class="claim-label">$CAST Available to Claim</div>
+          <div class="base-badge">
+            <span class="base-logo">B</span>
+            On Base Network
+          </div>
+        </div>
+
+        <button class="claim-btn" id="claimBtn">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M15 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span id="claimBtnLabel">CLAIM REWARDS</span>
+        </button>
+
+        <div class="card">
+          <div class="card-title">How It Works</div>
+          <div class="how-step">
+            <div class="how-num">1</div>
+            <div>
+              <div class="how-title">Mine $CAST</div>
+              <div class="how-desc">Start mining to earn $CAST tokens. Your hashrate determines earnings.</div>
+            </div>
+          </div>
+          <div class="how-step">
+            <div class="how-num">2</div>
+            <div>
+              <div class="how-title">Accumulate Rewards</div>
+              <div class="how-desc">Tokens accrue in real-time. View your balance on the dashboard.</div>
+            </div>
+          </div>
+          <div class="how-step">
+            <div class="how-num">3</div>
+            <div>
+              <div class="how-title">Claim on Base</div>
+              <div class="how-desc">Tap claim to initiate an on-chain transaction on Base network.</div>
+            </div>
+          </div>
+          <div class="how-step">
+            <div class="how-num">4</div>
+            <div>
+              <div class="how-title">Receive Tokens</div>
+              <div class="how-desc">$CAST tokens arrive in your connected wallet within seconds.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Claim History</div>
+          <div id="claimHistory">
+            <div class="claim-row">
+              <span class="claim-amount">+125.400 $CAST</span>
+              <span class="claim-date">May 10, 2026 · 14:32</span>
+              <span class="claim-badge">Confirmed</span>
+            </div>
+            <div class="claim-row">
+              <span class="claim-amount">+84.200 $CAST</span>
+              <span class="claim-date">May 8, 2026 · 09:15</span>
+              <span class="claim-badge">Confirmed</span>
+            </div>
+            <div class="claim-row">
+              <span class="claim-amount">+210.750 $CAST</span>
+              <span class="claim-date">May 5, 2026 · 21:48</span>
+              <span class="claim-badge">Confirmed</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Primary">
+      <button class="nav-item active" data-page="mine" aria-label="Mine">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M14.5 4.5l-9 9 4 4 9-9-4-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M15 4l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M5 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <span>Mine</span>
+      </button>
+      <button class="nav-item" data-page="pool" aria-label="Pool">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M3 12c3 0 3 3 6 3s3-3 6-3 3 3 6 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M3 9c3 0 3 3 6 3s3-3 6-3 3 3 6 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.6"/>
+        </svg>
+        <span>Pool</span>
+      </button>
+      <button class="nav-item" data-page="leaderboard" aria-label="Rank">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 19h4v-6H4v6zM10 19h4V5h-4v14zM16 19h4v-9h-4v9z" fill="currentColor"/>
+        </svg>
+        <span>Rank</span>
+      </button>
+      <button class="nav-item" data-page="claim" aria-label="Claim">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M15 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <span>Claim</span>
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    'use strict';
+
+    // ============ State ============
+    let isMining = false;
+    let hashrate = 0;
+    let targetHashrate = 0;
+    let earned = 0;
+    let shares = 0;
+    let sessionSeconds = 0;
+    let miningInterval = null;
+    let sessionInterval = null;
+    let blockHeight = 19847632;
+
+    let fcContext = null;
+    let fcSdk = null;
+    let ethProvider = null;
+    let isInFarcaster = false;
+    let userAddress = null;
+
+    const BASE_CHAIN = {
+      chainId: '0x2105',
+      chainName: 'Base',
+      rpcUrls: ['https://mainnet.base.org'],
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      blockExplorerUrls: ['https://basescan.org']
+    };
+
+    // ============ Helpers ============
+    const $ = (id) => document.getElementById(id);
+
+    const formatNumber = (n, decimals = 0) => {
+      if (Number.isNaN(n) || !Number.isFinite(n)) return '0';
+      return n.toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      });
+    };
+
+    const truncateAddr = (addr) => {
+      if (!addr || typeof addr !== 'string') return '';
+      return addr.slice(0, 6) + '...' + addr.slice(-4);
+    };
+
+    const padTime = (n) => n.toString().padStart(2, '0');
+
+    // ============ Background particles ============
+    function generateParticles() {
+      const container = $('particles');
+      if (!container) return;
+      const tokens = ['0x3a8f', '0xb12d', '0x7ec1', 'sha256', 'keccak', 'nonce:42', 'hash:9c1e', 'block#', 'merkle', 'gas:21k', 'wei:0', '0x9f3b', '0x2105', 'difficulty', 'pow', 'target', '0xa4d8', '0x5fe1'];
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < 18; i++) {
+        const el = document.createElement('span');
+        el.className = 'particle';
+        el.textContent = tokens[i % tokens.length];
+        const left = Math.random() * 100;
+        const fontSize = 8 + Math.random() * 6;
+        const duration = 12 + Math.random() * 18;
+        const delay = Math.random() * 15;
+        el.style.left = left + '%';
+        el.style.fontSize = fontSize + 'px';
+        el.style.animationDuration = duration + 's';
+        el.style.animationDelay = (-delay) + 's';
+        frag.appendChild(el);
+      }
+      container.appendChild(frag);
+    }
+
+    // ============ Theme ============
+    function setupTheme() {
+      const html = document.documentElement;
+      const stored = (() => {
+        try { return localStorage.getItem('cm-theme'); } catch (e) { return null; }
+      })();
+      if (stored === 'light' || stored === 'dark') {
+        html.setAttribute('data-theme', stored);
+      }
+      const toggle = $('themeToggle');
+      toggle.addEventListener('click', () => {
+        const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        html.setAttribute('data-theme', next);
+        try { localStorage.setItem('cm-theme', next); } catch (e) { /* ignore */ }
+      });
+    }
+
+    // ============ Page navigation ============
+    function setupNavigation() {
+      const navItems = document.querySelectorAll('.nav-item');
+      navItems.forEach((item) => {
+        item.addEventListener('click', () => {
+          const target = item.getAttribute('data-page');
+          switchPage(target);
+        });
+      });
+    }
+
+    function switchPage(name) {
+      document.querySelectorAll('.page').forEach((p) => {
+        p.classList.toggle('active', p.getAttribute('data-page') === name);
+      });
+      document.querySelectorAll('.nav-item').forEach((n) => {
+        n.classList.toggle('active', n.getAttribute('data-page') === name);
+      });
+      const content = $('content');
+      if (content) content.scrollTop = 0;
+    }
+
+    // ============ Mining ============
+    function setupMineButton() {
+      $('mineBtn').addEventListener('click', () => {
+        if (isMining) stopMining();
+        else startMining();
+      });
+    }
+
+    function startMining() {
+      isMining = true;
+      targetHashrate = 24 + Math.random() * 12;
+      sessionSeconds = 0;
+
+      $('mineBtnLabel').textContent = 'STOP';
+      $('mineBtnSubLabel').textContent = 'MINING';
+      $('mineBtn').classList.add('active');
+
+      const status = $('miningStatus');
+      status.classList.add('active');
+      status.querySelector('.text').textContent = 'Mining';
+
+      if (miningInterval) clearInterval(miningInterval);
+      miningInterval = setInterval(miningTick, 100);
+
+      if (sessionInterval) clearInterval(sessionInterval);
+      sessionInterval = setInterval(() => {
+        sessionSeconds++;
+        renderSessionTime();
+      }, 1000);
+    }
+
+    function stopMining() {
+      isMining = false;
+      $('mineBtnLabel').textContent = 'START';
+      $('mineBtnSubLabel').textContent = 'MINING';
+      $('mineBtn').classList.remove('active');
+
+      const status = $('miningStatus');
+      status.classList.remove('active');
+      status.querySelector('.text').textContent = 'Inactive';
+
+      if (sessionInterval) {
+        clearInterval(sessionInterval);
+        sessionInterval = null;
+      }
+      // miningInterval continues to ramp hashrate down
+    }
+
+    function miningTick() {
+      if (isMining) {
+        const delta = (targetHashrate - hashrate) * 0.08;
+        hashrate += delta;
+        if (Math.abs(hashrate - targetHashrate) < 0.5) {
+          hashrate += (Math.random() - 0.5) * 1.5;
+        }
+        if (hashrate < 0) hashrate = 0;
+
+        earned += hashrate * 0.0000012;
+
+        if (Math.random() < 0.15) shares++;
+
+        if (Math.random() < 0.005) {
+          blockHeight++;
+          $('netHeight').textContent = formatNumber(blockHeight);
+        }
+      } else {
+        hashrate *= 0.9;
+        if (hashrate < 0.01) {
+          hashrate = 0;
+          if (miningInterval) {
+            clearInterval(miningInterval);
+            miningInterval = null;
+          }
+        }
+      }
+
+      renderHashrate();
+      renderEarned();
+      renderShares();
+      renderEfficiency();
+      renderClaim();
+      renderPoolShare();
+      renderUserRank();
+    }
+
+    function renderHashrate() {
+      $('hashrateValue').textContent = hashrate.toFixed(2);
+    }
+
+    function renderEarned() {
+      $('earnedValue').textContent = earned.toFixed(4);
+    }
+
+    function renderShares() {
+      $('sharesValue').textContent = formatNumber(shares);
+    }
+
+    function renderEfficiency() {
+      const eff = isMining ? (94 + Math.random() * 5.8) : 0;
+      $('effValue').textContent = eff.toFixed(1) + '%';
+    }
+
+    function renderSessionTime() {
+      const h = Math.floor(sessionSeconds / 3600);
+      const m = Math.floor((sessionSeconds % 3600) / 60);
+      const s = sessionSeconds % 60;
+      $('sessionTime').textContent = `${padTime(h)}:${padTime(m)}:${padTime(s)}`;
+    }
+
+    function renderClaim() {
+      $('claimValue').textContent = earned.toFixed(3);
+    }
+
+    function renderPoolShare() {
+      // Pool hashrate is fluctuating GH/s — convert to MH/s for ratio (1 GH = 1000 MH)
+      const poolMHs = parseFloat($('poolHashrate').textContent) * 1000;
+      if (!poolMHs || poolMHs <= 0) return;
+      const pct = Math.min((hashrate / poolMHs) * 100, 99.99);
+      $('shareValue').textContent = pct.toFixed(2) + '%';
+      $('shareFill').style.width = Math.min(pct * 10, 100) + '%';
+    }
+
+    function renderUserRank() {
+      $('userRankTokens').textContent = formatNumber(earned, 0);
+      const hashLabel = hashrate >= 1000 ? (hashrate / 1000).toFixed(2) + ' GH' : Math.round(hashrate) + ' MH';
+      $('userRankHash').textContent = hashLabel;
+    }
+
+    // ============ Network stats animation ============
+    function startNetworkStatsAnimation() {
+      setInterval(() => {
+        const totalHash = 840 + Math.random() * 5;
+        $('netHashrate').textContent = totalHash.toFixed(1) + ' GH/s';
+
+        const diff = 14200000 + Math.floor(Math.random() * 10000);
+        $('netDifficulty').textContent = formatNumber(diff);
+
+        const miners = 1240 + Math.floor(Math.random() * 16);
+        $('poolMiners').textContent = formatNumber(miners);
+
+        const poolHash = 340 + Math.random() * 5;
+        $('poolHashrate').textContent = poolHash.toFixed(1);
+      }, 5000);
+    }
+
+    // ============ Claim flow ============
+    function setupClaimButton() {
+      $('claimBtn').addEventListener('click', handleClaim);
+    }
+
+    async function handleClaim() {
+      const btn = $('claimBtn');
+      const label = $('claimBtnLabel');
+
+      if (!userAddress) {
+        // Try connect first
+        const ok = await connectWallet();
+        if (!ok) {
+          showClaimState('Connect Wallet First');
+          setTimeout(() => resetClaimBtn(), 2000);
+          return;
+        }
+      }
+
+      if (earned <= 0) {
+        showClaimState('Nothing to Claim');
+        setTimeout(() => resetClaimBtn(), 2000);
+        return;
+      }
+
+      btn.disabled = true;
+      showClaimSpinner('Signing Transaction...');
+
+      try {
+        // Simulated sign delay
+        await new Promise((r) => setTimeout(r, 1400));
+        showClaimSpinner('Confirming on Base...');
+        await new Promise((r) => setTimeout(r, 1800));
+
+        // Append to claim history
+        prependClaim(earned);
+
+        showClaimState('Claimed Successfully!', true);
+        earned = 0;
+        renderEarned();
+        renderClaim();
+        renderUserRank();
+
+        setTimeout(() => resetClaimBtn(), 1800);
+      } catch (e) {
+        showClaimState('Claim Failed — Try Again');
+        setTimeout(() => resetClaimBtn(), 2200);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function showClaimSpinner(text) {
+      const btn = $('claimBtn');
+      btn.innerHTML = `<span class="spinner"></span><span>${text}</span>`;
+    }
+
+    function showClaimState(text, success = false) {
+      const btn = $('claimBtn');
+      const icon = success
+        ? `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        : `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M15 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+      btn.innerHTML = `${icon}<span>${text}</span>`;
+    }
+
+    function resetClaimBtn() {
+      const btn = $('claimBtn');
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M15 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span id="claimBtnLabel">CLAIM REWARDS</span>
+      `;
+    }
+
+    function prependClaim(amount) {
+      const container = $('claimHistory');
+      const now = new Date();
+      const month = now.toLocaleString('en-US', { month: 'short' });
+      const dateStr = `${month} ${now.getDate()}, ${now.getFullYear()} · ${padTime(now.getHours())}:${padTime(now.getMinutes())}`;
+      const row = document.createElement('div');
+      row.className = 'claim-row';
+      row.style.animation = 'fadeSlideIn 0.35s ease';
+      row.innerHTML = `
+        <span class="claim-amount">+${amount.toFixed(3)} $CAST</span>
+        <span class="claim-date">${dateStr}</span>
+        <span class="claim-badge">Confirmed</span>
+      `;
+      container.insertBefore(row, container.firstChild);
+    }
+
+    // ============ Farcaster integration ============
+    async function detectFarcaster() {
+      // Method 1: SDK
+      try {
+        if (window.frame && window.frame.sdk) fcSdk = window.frame.sdk;
+        else if (window.FrameSDK) {
+          try { fcSdk = new window.FrameSDK(); } catch (e) { /* ignore */ }
+        }
+        else if (window.farcaster) fcSdk = window.farcaster;
+
+        if (fcSdk) {
+          const ctxPromise = typeof fcSdk.context === 'function' ? fcSdk.context() : Promise.resolve(fcSdk.context);
+          fcContext = await Promise.race([
+            ctxPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+          ]);
+          if (fcContext) {
+            isInFarcaster = true;
+            return true;
+          }
+        }
+      } catch (e) {
+        // continue to other detection methods
+      }
+
+      // Method 2: iframe + URL params + referrer
+      try {
+        const isIframe = window !== window.parent;
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasFcParams = urlParams.has('fc_fid') || urlParams.has('fid') || urlParams.has('signer');
+        const referrer = (document.referrer || '').toLowerCase();
+        const isFcReferrer = referrer.includes('warpcast') || referrer.includes('farcaster') || referrer.includes('supercast');
+        if ((isIframe && (hasFcParams || isFcReferrer)) || hasFcParams) {
+          isInFarcaster = true;
+          return true;
+        }
+      } catch (e) { /* ignore */ }
+
+      return false;
+    }
+
+    function renderUserBar() {
+      if (!fcContext || !fcContext.user) {
+        $('userBar').classList.add('visible');
+        $('userName').textContent = 'Farcaster User';
+        $('userHandle').textContent = '—';
+        return;
+      }
+      const u = fcContext.user;
+      $('userBar').classList.add('visible');
+      $('userName').textContent = u.displayName || u.username || 'Farcaster User';
+      const fid = u.fid != null ? '#' + u.fid : '';
+      $('userHandle').textContent = `@${u.username || 'anon'}${fid ? ' · FID ' + fid : ''}`;
+      if (u.pfpUrl) {
+        $('userAvatar').style.backgroundImage = `url("${u.pfpUrl}")`;
+      }
+    }
+
+    async function connectWallet() {
+      try {
+        if (fcSdk && fcSdk.wallet) {
+          ethProvider = fcSdk.wallet.ethProvider || (fcSdk.wallet.getEthereumProvider && fcSdk.wallet.getEthereumProvider());
+        }
+        if (!ethProvider && window.ethereum) {
+          ethProvider = window.ethereum;
+        }
+        if (!ethProvider) {
+          $('userWallet').textContent = 'No Wallet';
+          return false;
+        }
+
+        const accounts = await ethProvider.request({ method: 'eth_requestAccounts' });
+        if (accounts && accounts.length > 0) {
+          userAddress = accounts[0];
+
+          // Switch to Base, add if missing
+          try {
+            await ethProvider.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: BASE_CHAIN.chainId }]
+            });
+          } catch (err) {
+            if (err && err.code === 4902) {
+              await ethProvider.request({
+                method: 'wallet_addEthereumChain',
+                params: [BASE_CHAIN]
+              });
+            }
+            // Other errors: silently ignore; some hosts auto-handle chain
+          }
+
+          const el = $('userWallet');
+          el.textContent = truncateAddr(userAddress);
+          el.classList.add('connected');
+          return true;
+        }
+      } catch (e) {
+        console.warn('connectWallet failed:', e);
+      }
+      return false;
+    }
+
+    function setupWalletButton() {
+      $('userWallet').addEventListener('click', connectWallet);
+    }
+
+    function signalFarcasterReady() {
+      try {
+        if (fcSdk && fcSdk.actions && typeof fcSdk.actions.ready === 'function') {
+          fcSdk.actions.ready();
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    function showApp() {
+      $('gateScreen').setAttribute('hidden', '');
+      $('app').removeAttribute('hidden');
+      renderUserBar();
+      // Try to connect wallet silently in the background
+      connectWallet().catch(() => { /* keep button visible */ });
+    }
+
+    function showGate() {
+      $('app').setAttribute('hidden', '');
+      $('gateScreen').removeAttribute('hidden');
+    }
+
+    function hideLoading() {
+      const el = $('loadingScreen');
+      el.classList.add('hidden');
+      setTimeout(() => {
+        el.style.display = 'none';
+      }, 450);
+    }
+
+    // ============ Init ============
+    async function init() {
+      generateParticles();
+      setupTheme();
+      setupNavigation();
+      setupMineButton();
+      setupClaimButton();
+      setupWalletButton();
+
+      // Initial renders so values are coherent before tick
+      renderHashrate();
+      renderEarned();
+      renderShares();
+      renderEfficiency();
+      renderSessionTime();
+      renderClaim();
+      renderUserRank();
+
+      const inFc = await detectFarcaster();
+      if (inFc) {
+        showApp();
+      } else {
+        showGate();
+      }
+      hideLoading();
+      signalFarcasterReady();
+      startNetworkStatsAnimation();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
