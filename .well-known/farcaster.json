@@ -1,4 +1,9 @@
 {
+  "accountAssociation": {
+    "header": "eyJmaWQiOjI1MDc0NywidHlwZSI6ImF1dGgiLCJrZXkiOiIweDNjM0M5MjgyMzQ1MzdkZDUwNzdFQUJhQzU1OTdBMGJFM0RiOTVlQzAifQ",
+    "payload": "eyJkb21haW4iOiJjYXN0bWluZXItZHl5ZHl3bHQuZGV2aW5hcHBzLmNvbSJ9",
+    "signature": "nRC6IR68b9SEeDo6KTa09XLyvcfb1T0RrkBpfxkSsZ1ELzRwYMqCE0n4rZEwCa2VVYjXcW/QHhMaZhNotVUMERs="
+  },
   "name": "CastMiner",
   "short_name": "CastMiner",
   "description": "Browser-based mining on Base network. Mine $CAST tokens directly from Farcaster.",
