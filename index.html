@@ -31,20 +31,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <script type="module">
-    // Load the modern Mini App SDK (preferred). We fall back to the legacy
-    // frame-sdk inside detectFarcaster() if neither global is set in time.
+    // Load the modern Mini App SDK. We attach it to a global and signal
+    // readiness via a Promise so the inline app boot can wait for it.
+    let _sdkReadyResolve;
+    window._castminerSdkReady = new Promise((r) => { _sdkReadyResolve = r; });
     (async () => {
       try {
-        const m = await import('https://esm.sh/@farcaster/miniapp-sdk');
-        if (m && (m.sdk || m.default)) {
-          window.miniappSdk = m.sdk || m.default;
+        const m = await import('https://esm.sh/@farcaster/miniapp-sdk@0.2.3');
+        const sdk = m.sdk || m.default || m;
+        if (sdk) {
+          window.miniappSdk = sdk;
+          console.log('[CastMiner] miniapp-sdk loaded; isInMiniApp(timeoutMs)=', typeof sdk.isInMiniApp);
         }
       } catch (e) {
-        console.warn('miniapp-sdk import failed, will use legacy fallback:', e);
+        console.warn('[CastMiner] miniapp-sdk import failed:', e);
       }
+      _sdkReadyResolve();
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/@farcaster/frame-sdk@latest/dist/index.min.js"></script>
 
   <style>
     :root[data-theme="dark"] {
@@ -2102,47 +2106,65 @@
     }
 
     // ============ Farcaster integration ============
+    function debugLog(...args) { try { console.log('[CastMiner]', ...args); } catch (_) {} }
+
+    // Subscribe future context arrivals so the user bar updates whenever the
+    // host eventually sends the context (some Warpcast versions deliver it
+    // after the splash transition).
+    function subscribeContext(sdk) {
+      if (!sdk || !sdk.context || !sdk.context.then) return;
+      sdk.context.then((ctx) => {
+        debugLog('context (deferred) resolved:', ctx && ctx.user ? `fid=${ctx.user.fid}` : 'no user');
+        if (ctx && (!fcContext || !fcContext.user)) {
+          fcContext = ctx;
+          isInFarcaster = true;
+          try { renderUserBar(); } catch (_) {}
+          try { renderDebugPanel(); } catch (_) {}
+        }
+      }).catch((e) => debugLog('context promise rejected:', e && e.message));
+    }
+
     async function detectFarcaster() {
-      // Wait briefly for either the new miniapp-sdk or the legacy frame-sdk
-      // to attach a global, since they load asynchronously.
-      const start = Date.now();
-      while (Date.now() - start < 1500) {
-        if (window.miniappSdk || window.frame?.sdk || window.FrameSDK || window.farcaster) break;
-        await new Promise((r) => setTimeout(r, 50));
+      // Wait for the module loader to finish (it always resolves, even on
+      // import failure).
+      try { await window._castminerSdkReady; } catch (_) {}
+
+      if (window.miniappSdk) {
+        fcSdk = window.miniappSdk;
+        debugLog('using miniappSdk. wallet keys:', fcSdk.wallet ? Object.keys(fcSdk.wallet) : 'no wallet');
+        subscribeContext(fcSdk);
+      } else {
+        debugLog('miniappSdk not loaded.');
       }
 
-      // Method 1: SDK
-      try {
-        if (window.miniappSdk) fcSdk = window.miniappSdk;
-        else if (window.frame && window.frame.sdk) fcSdk = window.frame.sdk;
-        else if (window.FrameSDK) {
-          try { fcSdk = new window.FrameSDK(); } catch (e) { /* ignore */ }
-        }
-        else if (window.farcaster) fcSdk = window.farcaster;
-
-        if (fcSdk) {
-          const ctxPromise = typeof fcSdk.context === 'function' ? fcSdk.context() : Promise.resolve(fcSdk.context);
-          fcContext = await Promise.race([
-            ctxPromise,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+      // Method 1: try to get context from SDK with a generous timeout.
+      if (fcSdk && fcSdk.context && fcSdk.context.then) {
+        try {
+          const ctx = await Promise.race([
+            fcSdk.context,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('context timeout')), 8000))
           ]);
-          if (fcContext) {
+          if (ctx) {
+            fcContext = ctx;
             isInFarcaster = true;
+            debugLog('initial context:', ctx && ctx.user ? `fid=${ctx.user.fid}, username=${ctx.user.username}` : 'no user yet');
             return true;
           }
+        } catch (e) {
+          debugLog('context wait failed:', e && e.message);
         }
-      } catch (e) {
-        // continue to other detection methods
       }
 
-      // Method 2: iframe + URL params + referrer
+      // Method 2: iframe + URL params + referrer (run when SDK didn't deliver
+      // context yet — we still want to enter the app and let context arrive
+      // later via subscribeContext).
       try {
         const isIframe = window !== window.parent;
         const urlParams = new URLSearchParams(window.location.search);
         const hasFcParams = urlParams.has('fc_fid') || urlParams.has('fid') || urlParams.has('signer');
         const referrer = (document.referrer || '').toLowerCase();
         const isFcReferrer = referrer.includes('warpcast') || referrer.includes('farcaster') || referrer.includes('supercast');
-        if ((isIframe && (hasFcParams || isFcReferrer)) || hasFcParams) {
+        if (isIframe || hasFcParams || isFcReferrer || (typeof window.ReactNativeWebView !== 'undefined')) {
           isInFarcaster = true;
           return true;
         }
@@ -2161,27 +2183,65 @@
       const u = fcContext.user;
       $('userBar').classList.add('visible');
       $('userName').textContent = u.displayName || u.username || 'Farcaster User';
-      const fid = u.fid != null ? '#' + u.fid : '';
-      $('userHandle').textContent = `@${u.username || 'anon'}${fid ? ' · FID ' + fid : ''}`;
+      const fid = u.fid != null ? String(u.fid) : '';
+      const parts = [];
+      if (u.username) parts.push('@' + u.username);
+      if (fid) parts.push('FID ' + fid);
+      $('userHandle').textContent = parts.length ? parts.join(' · ') : '—';
       if (u.pfpUrl) {
         $('userAvatar').style.backgroundImage = `url("${u.pfpUrl}")`;
+        $('userAvatar').style.backgroundSize = 'cover';
+        $('userAvatar').style.backgroundPosition = 'center';
       }
+    }
+
+    async function getEthProvider() {
+      if (fcSdk && fcSdk.wallet) {
+        // The modern SDK exposes ethProvider as a property AND a
+        // getEthereumProvider() async getter. Prefer the explicit getter
+        // because some hosts initialize it lazily.
+        if (typeof fcSdk.wallet.getEthereumProvider === 'function') {
+          try {
+            const p = await fcSdk.wallet.getEthereumProvider();
+            if (p) return p;
+          } catch (e) {
+            debugLog('getEthereumProvider() threw:', e && e.message);
+          }
+        }
+        if (fcSdk.wallet.ethProvider) return fcSdk.wallet.ethProvider;
+      }
+      if (window.ethereum) return window.ethereum;
+      return null;
     }
 
     async function connectWallet() {
       try {
-        if (fcSdk && fcSdk.wallet) {
-          ethProvider = fcSdk.wallet.ethProvider || (fcSdk.wallet.getEthereumProvider && fcSdk.wallet.getEthereumProvider());
-        }
-        if (!ethProvider && window.ethereum) {
-          ethProvider = window.ethereum;
-        }
+        ethProvider = await getEthProvider();
         if (!ethProvider) {
+          debugLog('no eth provider available.');
           $('userWallet').textContent = 'No Wallet';
           return false;
         }
+        debugLog('eth provider obtained.');
 
-        const accounts = await ethProvider.request({ method: 'eth_requestAccounts' });
+        // Try silent eth_accounts first (no popup), fall back to
+        // eth_requestAccounts (may show consent UI).
+        let accounts = [];
+        try {
+          accounts = await ethProvider.request({ method: 'eth_accounts' });
+          debugLog('eth_accounts ->', accounts);
+        } catch (e) {
+          debugLog('eth_accounts failed:', e && e.message);
+        }
+        if (!accounts || accounts.length === 0) {
+          try {
+            accounts = await ethProvider.request({ method: 'eth_requestAccounts' });
+            debugLog('eth_requestAccounts ->', accounts);
+          } catch (e) {
+            debugLog('eth_requestAccounts failed:', e && e.message);
+          }
+        }
+
         if (accounts && accounts.length > 0) {
           userAddress = accounts[0];
 
@@ -2193,10 +2253,12 @@
             });
           } catch (err) {
             if (err && err.code === 4902) {
-              await ethProvider.request({
-                method: 'wallet_addEthereumChain',
-                params: [BASE_CHAIN]
-              });
+              try {
+                await ethProvider.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [BASE_CHAIN]
+                });
+              } catch (_) { /* host may not support */ }
             }
             // Other errors: silently ignore; some hosts auto-handle chain
           }
@@ -2204,12 +2266,37 @@
           const el = $('userWallet');
           el.textContent = truncateAddr(userAddress);
           el.classList.add('connected');
+          try { renderDebugPanel(); } catch (_) {}
           return true;
         }
       } catch (e) {
         console.warn('connectWallet failed:', e);
       }
       return false;
+    }
+
+    // ---- Debug overlay (enable with ?debug=1) ----
+    function renderDebugPanel() {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has('debug')) return;
+      let panel = document.getElementById('debugPanel');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'debugPanel';
+        panel.style.cssText = 'position:fixed;bottom:80px;left:8px;right:8px;background:rgba(0,0,0,0.85);color:#9be;padding:10px 12px;border-radius:10px;font:11px monospace;z-index:9999;line-height:1.5;border:1px solid rgba(255,255,255,0.1);max-height:240px;overflow:auto;';
+        document.body.appendChild(panel);
+      }
+      const u = fcContext && fcContext.user;
+      const lines = [
+        'sdk: ' + (fcSdk ? 'loaded' : 'missing'),
+        'in iframe: ' + (window !== window.parent),
+        'context.user: ' + (u ? `fid=${u.fid} @${u.username || '?'}` : 'null'),
+        'displayName: ' + (u && u.displayName || '—'),
+        'pfpUrl: ' + (u && u.pfpUrl ? u.pfpUrl.slice(0, 40) + '...' : '—'),
+        'userAddress: ' + (userAddress || 'null'),
+        'ethProvider: ' + (ethProvider ? 'yes' : 'no'),
+      ];
+      panel.textContent = lines.join('\n');
     }
 
     function setupWalletButton() {
@@ -2317,6 +2404,7 @@
       hideLoading();
       signalFarcasterReady();
       startNetworkStatsAnimation();
+      try { renderDebugPanel(); } catch (_) {}
 
       // Refresh on-chain balance every 20s while the app is open
       if (!balanceRefreshInterval) {
