@@ -1,14 +1,27 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "castminer",
+  "main": "src/index.js",
   "compatibility_date": "2026-05-13",
   "observability": {
     "enabled": true
   },
   "assets": {
-    "directory": "."
+    "directory": ".",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
   },
   "compatibility_flags": [
     "nodejs_compat"
-  ]
+  ],
+  "vars": {
+    "CAST_CHAIN_ID": "8453",
+    "CAST_CONTRACT": "0x41909655593e331151cae645f132e28d531f28b2",
+    "CLAIM_HASH_FORMAT": "packed_msg_amount_nonce_chainid",
+    "CLAIM_ENVELOPE": "eip191",
+    "MAX_CAST_PER_REQUEST": "5",
+    "MAX_CAST_PER_ADDRESS_PER_DAY": "100",
+    "MIN_SECONDS_BETWEEN_CLAIMS": "30",
+    "ALLOWED_ORIGINS": "*"
+  }
 }

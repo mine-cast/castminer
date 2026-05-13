@@ -1,0 +1,18 @@
+{
+  "name": "castminer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CastMiner Mini App + Cloudflare Worker signer for on-chain $CAST claims.",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.6.0",
+    "@noble/hashes": "^1.5.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

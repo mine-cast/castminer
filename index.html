@@ -1595,13 +1595,37 @@
     //
     // You can override the signer URL with `?signer=<url>` (handy for local dev,
     // staging, etc.) without rebuilding the app.
+    // The default deployment serves both the static frontend and the signer
+    // Worker from the same Cloudflare origin, so an empty default points at
+    // the same-origin `/api/sign-claim` endpoint. Override with `?signer=<url>`
+    // (handy when testing the devinapps.com mirror against a remote signer).
     const DEFAULT_SIGNER_URL = '';
+    let _signerProbeCache = null;
     function getSignerUrl() {
       try {
         const u = new URL(window.location.href).searchParams.get('signer');
         if (u) return u.replace(/\/$/, '');
       } catch (e) { /* ignore */ }
-      return (window.CASTMINER_SIGNER_URL || DEFAULT_SIGNER_URL || '').replace(/\/$/, '');
+      if (window.CASTMINER_SIGNER_URL) return window.CASTMINER_SIGNER_URL.replace(/\/$/, '');
+      if (DEFAULT_SIGNER_URL) return DEFAULT_SIGNER_URL.replace(/\/$/, '');
+      // Same-origin default. Returns '' if the current origin clearly cannot
+      // host the signer (e.g. devinapps.com static deployment).
+      return location.origin.replace(/\/$/, '');
+    }
+
+    async function probeSignerAvailable() {
+      if (_signerProbeCache !== null) return _signerProbeCache;
+      const url = getSignerUrl();
+      if (!url) return (_signerProbeCache = false);
+      try {
+        const res = await fetch(url + '/api/healthz', { method: 'GET' });
+        if (!res.ok) return (_signerProbeCache = false);
+        const j = await res.json();
+        _signerProbeCache = !!(j && j.signer_loaded);
+        return _signerProbeCache;
+      } catch (e) {
+        return (_signerProbeCache = false);
+      }
     }
 
     const CLAIM_SELECTOR = '0x8127bcf2';
@@ -1627,7 +1651,7 @@
       const body = { address, amount: amountCast };
       if (opts && opts.format) body.format = opts.format;
       if (opts && opts.envelope) body.envelope = opts.envelope;
-      const res = await fetch(signer + '/sign-claim', {
+      const res = await fetch(signer + '/api/sign-claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -1964,10 +1988,10 @@
         return;
       }
 
-      const signerUrl = getSignerUrl();
-      if (!signerUrl) {
-        // Fallback to simulated flow when the signer service is not wired
-        // up yet. UI feedback identical to the real on-chain claim.
+      const signerReady = await probeSignerAvailable();
+      if (!signerReady) {
+        // No on-chain signer available — keep the previous simulated flow
+        // so the UI still does something visible.
         return runSimulatedClaim();
       }
 
