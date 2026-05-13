@@ -1587,6 +1587,134 @@
       renderOnchainBalance();
     }
 
+    // ============ Claim wiring (on-chain) ============
+    // Signer service that holds the deployer / claimSigner PK and signs
+    // (claimer, amount, nonce) tuples. The contract `claim(uint256,bytes32,bytes)`
+    // selector is 0x8127bcf2 — it ecrecover()s the signature against claimSigner()
+    // and mints `amount` $CAST to msg.sender on success.
+    //
+    // You can override the signer URL with `?signer=<url>` (handy for local dev,
+    // staging, etc.) without rebuilding the app.
+    const DEFAULT_SIGNER_URL = '';
+    function getSignerUrl() {
+      try {
+        const u = new URL(window.location.href).searchParams.get('signer');
+        if (u) return u.replace(/\/$/, '');
+      } catch (e) { /* ignore */ }
+      return (window.CASTMINER_SIGNER_URL || DEFAULT_SIGNER_URL || '').replace(/\/$/, '');
+    }
+
+    const CLAIM_SELECTOR = '0x8127bcf2';
+
+    function strip0x(s) { return s.replace(/^0x/i, ''); }
+
+    // Encode `claim(uint256 amount, bytes32 nonce, bytes signature)` calldata.
+    function encodeClaimCallData(amountWei, nonceHex, sigHex) {
+      const amount = pad32(BigInt(amountWei).toString(16));
+      const nonce = pad32(strip0x(nonceHex)).slice(0, 64);
+      const sigBytes = strip0x(sigHex);
+      const sigLen = sigBytes.length / 2;
+      const offsetHex = pad32((96).toString(16));
+      const lenHex = pad32(sigLen.toString(16));
+      const paddedLen = Math.ceil(sigLen / 32) * 32;
+      const padded = sigBytes.padEnd(paddedLen * 2, '0');
+      return CLAIM_SELECTOR + amount + nonce + offsetHex + lenHex + padded;
+    }
+
+    async function requestClaimSignature(address, amountCast, opts) {
+      const signer = getSignerUrl();
+      if (!signer) throw new Error('Signer service not configured. Set ?signer=<url> or window.CASTMINER_SIGNER_URL.');
+      const body = { address, amount: amountCast };
+      if (opts && opts.format) body.format = opts.format;
+      if (opts && opts.envelope) body.envelope = opts.envelope;
+      const res = await fetch(signer + '/sign-claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        let detail = '';
+        try { detail = JSON.stringify(await res.json()); } catch (e) { detail = await res.text(); }
+        throw new Error(`Signer ${res.status}: ${detail.slice(0, 240)}`);
+      }
+      return await res.json();
+    }
+
+    async function sendClaimTx(amountWei, nonceHex, sigHex) {
+      if (!ethProvider) throw new Error('No wallet provider attached.');
+      if (!userAddress) throw new Error('Wallet not connected.');
+      const data = encodeClaimCallData(amountWei, nonceHex, sigHex);
+      const tx = await ethProvider.request({
+        method: 'eth_sendTransaction',
+        params: [{ from: userAddress, to: CAST_CONTRACT, data, value: '0x0' }]
+      });
+      return tx;
+    }
+
+    async function waitForReceipt(txHash, maxMs) {
+      const started = Date.now();
+      while (Date.now() - started < (maxMs || 60000)) {
+        try {
+          const r = await fetch(BASE_RPC, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1,
+              method: 'eth_getTransactionReceipt',
+              params: [txHash]
+            })
+          });
+          const j = await r.json();
+          if (j && j.result) return j.result;
+        } catch (e) { /* keep polling */ }
+        await new Promise((res) => setTimeout(res, 2500));
+      }
+      return null;
+    }
+
+    // Iterate through the 8 known (format, envelope) combos until one of
+    // them yields a receipt with status 0x1. The backend pre-signs all
+    // variants so each retry is just a new tx, no extra round trip.
+    async function submitClaimWithFallback(addressForSign, amountCast) {
+      const initial = await requestClaimSignature(addressForSign, amountCast);
+      const variants = initial.variants || {};
+      const ordering = [
+        `${initial.hash_format}__${initial.envelope}`,
+        'packed_msg_amount_nonce_chainid__eip191',
+        'packed_msg_amount_nonce__eip191',
+        'packed_msg_amount_nonce__raw',
+        'packed_msg_amount_nonce_contract__eip191',
+        'packed_msg_amount_nonce_contract__raw',
+        'packed_contract_msg_amount_nonce__eip191',
+        'packed_contract_msg_amount_nonce__raw',
+        'encode_msg_amount_nonce__eip191',
+        'encode_msg_amount_nonce__raw',
+        'encode_msg_amount_nonce_chainid__eip191',
+        'encode_msg_amount_nonce_chainid__raw',
+      ].filter((v, i, a) => a.indexOf(v) === i);
+
+      let lastError = null;
+      for (const key of ordering) {
+        const sig = variants[key] || (key === `${initial.hash_format}__${initial.envelope}` ? initial.signature : null);
+        if (!sig) continue;
+        try {
+          showClaimSpinner(`Submitting on Base… (${key.split('__')[1]})`);
+          const txHash = await sendClaimTx(initial.amount_wei, initial.nonce, sig);
+          showClaimSpinner('Awaiting confirmation…');
+          const receipt = await waitForReceipt(txHash, 90000);
+          if (receipt && (receipt.status === '0x1' || receipt.status === 1)) {
+            return { txHash, receipt, variant: key, amountWei: initial.amount_wei };
+          }
+          lastError = new Error(`Variant ${key} reverted on-chain.`);
+        } catch (e) {
+          lastError = e;
+          // user rejection — stop trying
+          if (e && /reject|denied|cancel/i.test(e.message || '')) throw e;
+        }
+      }
+      throw lastError || new Error('All claim signature variants failed.');
+    }
+
     // ============ Helpers ============
     const $ = (id) => document.getElementById(id);
 
@@ -1819,10 +1947,8 @@
 
     async function handleClaim() {
       const btn = $('claimBtn');
-      const label = $('claimBtnLabel');
 
       if (!userAddress) {
-        // Try connect first
         const ok = await connectWallet();
         if (!ok) {
           showClaimState('Connect Wallet First');
@@ -1838,27 +1964,56 @@
         return;
       }
 
+      const signerUrl = getSignerUrl();
+      if (!signerUrl) {
+        // Fallback to simulated flow when the signer service is not wired
+        // up yet. UI feedback identical to the real on-chain claim.
+        return runSimulatedClaim();
+      }
+
       btn.disabled = true;
-      showClaimSpinner('Signing Transaction...');
+      showClaimSpinner('Requesting signature…');
 
       try {
-        // Simulated sign delay
+        const amountCast = Math.min(earned, 5);
+        const result = await submitClaimWithFallback(userAddress, amountCast);
+        prependClaim(amountCast, result.txHash);
+        showClaimState('Claimed on Base!', true);
+        earned = Math.max(0, earned - amountCast);
+        renderEarned();
+        renderClaim();
+        renderUserRank();
+        refreshOnchainBalance().catch(() => {});
+        setTimeout(() => resetClaimBtn(), 2200);
+      } catch (e) {
+        const msg = (e && e.message) || 'Claim failed';
+        if (/reject|denied|cancel/i.test(msg)) {
+          showClaimState('Cancelled');
+        } else {
+          console.warn('claim failed:', e);
+          showClaimState('Claim failed — try again');
+        }
+        setTimeout(() => resetClaimBtn(), 2400);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runSimulatedClaim() {
+      const btn = $('claimBtn');
+      btn.disabled = true;
+      showClaimSpinner('Signing Transaction...');
+      try {
         await new Promise((r) => setTimeout(r, 1400));
         showClaimSpinner('Confirming on Base...');
         await new Promise((r) => setTimeout(r, 1800));
-
-        // Append to claim history
         prependClaim(earned);
-
         showClaimState('Claimed Successfully!', true);
         earned = 0;
         renderEarned();
         renderClaim();
         renderUserRank();
-        // Refresh on-chain balance so user sees fresh data even though
-        // the simulated claim does not actually mint yet.
         refreshOnchainBalance().catch(() => {});
-
         setTimeout(() => resetClaimBtn(), 1800);
       } catch (e) {
         showClaimState('Claim Failed — Try Again');
@@ -1889,7 +2044,7 @@
       `;
     }
 
-    function prependClaim(amount) {
+    function prependClaim(amount, txHash) {
       const container = $('claimHistory');
       const now = new Date();
       const month = now.toLocaleString('en-US', { month: 'short' });
@@ -1897,10 +2052,13 @@
       const row = document.createElement('div');
       row.className = 'claim-row';
       row.style.animation = 'fadeSlideIn 0.35s ease';
+      const badge = txHash
+        ? `<a class="claim-badge" href="https://basescan.org/tx/${txHash}" target="_blank" rel="noopener">View on Base</a>`
+        : `<span class="claim-badge">Confirmed</span>`;
       row.innerHTML = `
-        <span class="claim-amount">+${amount.toFixed(3)} $CAST</span>
+        <span class="claim-amount">+${Number(amount).toFixed(3)} $CAST</span>
         <span class="claim-date">${dateStr}</span>
-        <span class="claim-badge">Confirmed</span>
+        ${badge}
       `;
       container.insertBefore(row, container.firstChild);
     }

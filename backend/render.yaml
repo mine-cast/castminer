@@ -1,0 +1,40 @@
+# Render Blueprint for the CastMiner claim signer service.
+#
+# 1. Sign in to https://render.com (GitHub OAuth, no phone OTP needed).
+# 2. Open https://dashboard.render.com/select-repo?type=blueprint and pick
+#    `mine-cast/castminer`. Set Branch = `devin/1778691247-castminer-app`,
+#    Root Directory = `backend`. Render reads this file and provisions the
+#    service automatically.
+# 3. After the service is created, open it → Environment → add
+#    `CASTMINER_DEPLOYER_PK` with the deployer / claimSigner private key.
+#    The service will restart and start signing.
+# 4. Replace `<your-render-url>` in the frontend with the URL Render gives you
+#    (e.g. `https://castminer-signer.onrender.com`).
+services:
+  - type: web
+    name: castminer-signer
+    runtime: python
+    plan: free
+    rootDir: backend
+    region: oregon
+    branch: devin/1778691247-castminer-app
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: CASTMINER_DEPLOYER_PK
+        sync: false  # filled in manually from the Render dashboard
+      - key: ALLOWED_ORIGINS
+        value: https://castminer-dyydywlt.devinapps.com,http://localhost:8765
+      - key: CLAIM_HASH_FORMAT
+        value: packed_msg_amount_nonce_chainid
+      - key: CLAIM_ENVELOPE
+        value: eip191
+      - key: CAST_CHAIN_ID
+        value: "8453"
+      - key: MAX_CAST_PER_REQUEST
+        value: "5"
+      - key: MAX_CAST_PER_ADDRESS_PER_DAY
+        value: "100"
+      - key: MIN_SECONDS_BETWEEN_CLAIMS
+        value: "30"
