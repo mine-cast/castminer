@@ -6,14 +6,25 @@
   <meta name="color-scheme" content="dark light" />
   <title>CastMiner — Browser Mining on Base</title>
 
-  <!-- Farcaster Frame meta tags -->
-  <meta name="fc:frame" content="vNext" />
-  <meta name="fc:frame:image" content="https://castminer.ngabssamsung.workers.dev/splash.png" />
-  <meta name="fc:frame:button:1" content="Open CastMiner" />
-  <meta name="fc:frame:button:1:action" content="launch_frame" />
+  <!--
+    Farcaster Mini App embed meta tag (per
+    https://miniapps.farcaster.xyz/docs/specification#mini-app-embed).
+    When this URL is pasted into a cast, Warpcast (and other Farcaster
+    clients) fetch this HTML, read the fc:miniapp meta tag, and render a
+    rich embed with the imageUrl shown 3:2 and a button that launches the
+    Mini App. The fc:frame tag carries the same payload for backward
+    compatibility with older clients.
+  -->
+  <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://castminer.ngabssamsung.workers.dev/embed.png","button":{"title":"Open CastMiner","action":{"type":"launch_frame","name":"CastMiner","url":"https://castminer.ngabssamsung.workers.dev","splashImageUrl":"https://castminer.ngabssamsung.workers.dev/splash.png","splashBackgroundColor":"#0A0E1A"}}}' />
+  <meta name="fc:frame" content='{"version":"1","imageUrl":"https://castminer.ngabssamsung.workers.dev/embed.png","button":{"title":"Open CastMiner","action":{"type":"launch_frame","name":"CastMiner","url":"https://castminer.ngabssamsung.workers.dev","splashImageUrl":"https://castminer.ngabssamsung.workers.dev/splash.png","splashBackgroundColor":"#0A0E1A"}}}' />
+
   <meta property="og:title" content="CastMiner — Browser Mining on Base" />
   <meta property="og:description" content="Mine $CAST tokens directly from Farcaster. Powered by Base network." />
   <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://castminer.ngabssamsung.workers.dev/embed.png" />
+  <meta property="og:url" content="https://castminer.ngabssamsung.workers.dev" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://castminer.ngabssamsung.workers.dev/embed.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
