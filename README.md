@@ -10,12 +10,21 @@ Users mine **$CAST** by contributing browser hashrate inside Warpcast / Supercas
 
 This repo is currently **already deployed** at:
 
-- App: <https://castminer-dyydywlt.devinapps.com>
-- Manifest: <https://castminer-dyydywlt.devinapps.com/.well-known/farcaster.json>
-- Icon: <https://castminer-dyydywlt.devinapps.com/icon.png>
-- Splash: <https://castminer-dyydywlt.devinapps.com/splash.png>
+- App: <https://castminer.ngabssamsung.workers.dev>
+- Manifest: <https://castminer.ngabssamsung.workers.dev/.well-known/farcaster.json>
+- Icon: <https://castminer.ngabssamsung.workers.dev/icon.png>
+- Splash: <https://castminer.ngabssamsung.workers.dev/splash.png>
+- Signer health: <https://castminer.ngabssamsung.workers.dev/api/healthz>
 
-The manifest already points at this URL so the Mini App is **ready to register on Warpcast** without any additional hosting setup.
+The Cloudflare Worker hosts both the static frontend and the
+`/api/sign-claim` endpoint that issues on-chain claim signatures.
+Cloudflare auto-deploys on every push to this branch via the connected
+GitHub integration. The `CASTMINER_DEPLOYER_PK` secret must be set in
+the Cloudflare dashboard (Workers → castminer → Settings → Variables
+and Secrets, encrypted) for the signer to be active.
+
+The manifest already points at this URL so the Mini App is **ready to
+register on Warpcast** without any additional hosting setup.
 
 To migrate to your own domain later, see the [Deploy](#deploy) section.
 

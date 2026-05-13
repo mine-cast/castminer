@@ -25,7 +25,7 @@ services:
       - key: CASTMINER_DEPLOYER_PK
         sync: false  # filled in manually from the Render dashboard
       - key: ALLOWED_ORIGINS
-        value: https://castminer-dyydywlt.devinapps.com,http://localhost:8765
+        value: https://castminer.ngabssamsung.workers.dev,http://localhost:8765
       - key: CLAIM_HASH_FORMAT
         value: packed_msg_amount_nonce_chainid
       - key: CLAIM_ENVELOPE

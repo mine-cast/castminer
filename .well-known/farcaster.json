@@ -1,23 +1,23 @@
 {
   "accountAssociation": {
     "header": "eyJmaWQiOjI1MDc0NywidHlwZSI6ImF1dGgiLCJrZXkiOiIweDNjM0M5MjgyMzQ1MzdkZDUwNzdFQUJhQzU1OTdBMGJFM0RiOTVlQzAifQ",
-    "payload": "eyJkb21haW4iOiJjYXN0bWluZXItZHl5ZHl3bHQuZGV2aW5hcHBzLmNvbSJ9",
-    "signature": "nRC6IR68b9SEeDo6KTa09XLyvcfb1T0RrkBpfxkSsZ1ELzRwYMqCE0n4rZEwCa2VVYjXcW/QHhMaZhNotVUMERs="
+    "payload": "eyJkb21haW4iOiJjYXN0bWluZXIubmdhYnNzYW1zdW5nLndvcmtlcnMuZGV2In0",
+    "signature": "adGcAjRewGPkrGjmYY7XxfTyeHJkeUFWuQYCwPorFTJajV7Ha8+h4lFOD4+LxLyuePhWOX3uRgOrmEvkTSyKGhs="
   },
   "name": "CastMiner",
   "short_name": "CastMiner",
   "description": "Browser-based mining on Base network. Mine $CAST tokens directly from Farcaster.",
   "version": "1.0.0",
-  "homeUrl": "https://castminer-dyydywlt.devinapps.com",
-  "iconUrl": "https://castminer-dyydywlt.devinapps.com/icon.png",
-  "splashImageUrl": "https://castminer-dyydywlt.devinapps.com/splash.png",
+  "homeUrl": "https://castminer.ngabssamsung.workers.dev",
+  "iconUrl": "https://castminer.ngabssamsung.workers.dev/icon.png",
+  "splashImageUrl": "https://castminer.ngabssamsung.workers.dev/splash.png",
   "splashBackgroundColor": "#0A0E1A",
   "frame": {
     "version": "next",
     "name": "CastMiner",
-    "iconUrl": "https://castminer-dyydywlt.devinapps.com/icon.png",
-    "homeUrl": "https://castminer-dyydywlt.devinapps.com",
-    "splashImageUrl": "https://castminer-dyydywlt.devinapps.com/splash.png",
+    "iconUrl": "https://castminer.ngabssamsung.workers.dev/icon.png",
+    "homeUrl": "https://castminer.ngabssamsung.workers.dev",
+    "splashImageUrl": "https://castminer.ngabssamsung.workers.dev/splash.png",
     "splashBackgroundColor": "#0A0E1A"
   },
   "triggers": [
