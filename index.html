@@ -1595,11 +1595,14 @@
     //
     // You can override the signer URL with `?signer=<url>` (handy for local dev,
     // staging, etc.) without rebuilding the app.
-    // The default deployment serves both the static frontend and the signer
-    // Worker from the same Cloudflare origin, so an empty default points at
-    // the same-origin `/api/sign-claim` endpoint. Override with `?signer=<url>`
-    // (handy when testing the devinapps.com mirror against a remote signer).
-    const DEFAULT_SIGNER_URL = '';
+    // The Cloudflare Worker that holds the deployer / claimSigner PK and
+    // serves /api/sign-claim. The Worker is deployed alongside this static
+    // frontend on Cloudflare, so when the app is served from the
+    // workers.dev origin this same-origin call works without any extra
+    // configuration. When the app is served from a mirror (e.g. the
+    // devinapps.com deployment), we point at the absolute Worker URL so
+    // signature requests still reach the right backend.
+    const DEFAULT_SIGNER_URL = 'https://castminer.ngabssamsung.workers.dev';
     let _signerProbeCache = null;
     function getSignerUrl() {
       try {
