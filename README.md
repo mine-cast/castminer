@@ -6,6 +6,19 @@ Users mine **$CAST** by contributing browser hashrate inside Warpcast / Supercas
 
 > Non-Farcaster visitors see a gate page that points them to install Warpcast. No mining is allowed outside Farcaster clients.
 
+## Live deployment
+
+This repo is currently **already deployed** at:
+
+- App: <https://castminer-dyydywlt.devinapps.com>
+- Manifest: <https://castminer-dyydywlt.devinapps.com/.well-known/farcaster.json>
+- Icon: <https://castminer-dyydywlt.devinapps.com/icon.png>
+- Splash: <https://castminer-dyydywlt.devinapps.com/splash.png>
+
+The manifest already points at this URL so the Mini App is **ready to register on Warpcast** without any additional hosting setup.
+
+To migrate to your own domain later, see the [Deploy](#deploy) section.
+
 ---
 
 ## Stack
