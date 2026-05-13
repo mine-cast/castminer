@@ -19,6 +19,20 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
+  <script type="module">
+    // Load the modern Mini App SDK (preferred). We fall back to the legacy
+    // frame-sdk inside detectFarcaster() if neither global is set in time.
+    (async () => {
+      try {
+        const m = await import('https://esm.sh/@farcaster/miniapp-sdk');
+        if (m && (m.sdk || m.default)) {
+          window.miniappSdk = m.sdk || m.default;
+        }
+      } catch (e) {
+        console.warn('miniapp-sdk import failed, will use legacy fallback:', e);
+      }
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/@farcaster/frame-sdk@latest/dist/index.min.js"></script>
 
   <style>
@@ -107,13 +121,22 @@
       border-top-color: var(--primary);
       animation: spin 0.8s linear infinite;
     }
-
     .loading-text {
       font-family: 'Outfit', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text);
+      margin: 0;
+      text-align: center;
+    }
+    .loading-substep {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12.5px;
       color: var(--text-secondary);
-      letter-spacing: 0.5px;
+      margin: 0;
+      text-align: center;
+      max-width: 280px;
+      padding: 0 24px;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -890,6 +913,29 @@
       border-bottom: 1px solid var(--card-border);
     }
     .claim-row:last-child { border-bottom: none; }
+    .onchain-balance {
+      margin-top: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+    }
+    .onchain-balance[hidden] { display: none; }
+    .onchain-balance-label {
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .onchain-balance-value {
+      color: var(--text);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
     .claim-amount {
       font-family: 'Outfit', sans-serif;
       font-weight: 600;
@@ -957,7 +1003,8 @@
   <!-- Loading screen -->
   <div id="loadingScreen" class="loading-screen">
     <div class="loading-spinner"></div>
-    <p class="loading-text">Connecting to Farcaster...</p>
+    <p class="loading-text" id="loadingText">Authenticating with Farcaster...</p>
+    <p class="loading-substep" id="loadingSubstep">Verifying your Farcaster identity</p>
   </div>
 
   <!-- Gate screen for non-Farcaster visitors -->
@@ -1273,6 +1320,10 @@
             <span class="base-logo">B</span>
             On Base Network
           </div>
+          <div class="onchain-balance" id="onchainBalanceWrap" hidden>
+            <span class="onchain-balance-label">Wallet balance</span>
+            <span class="onchain-balance-value" id="onchainBalance">0.000 CAST</span>
+          </div>
         </div>
 
         <button class="claim-btn" id="claimBtn">
@@ -1395,6 +1446,146 @@
       nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
       blockExplorerUrls: ['https://basescan.org']
     };
+
+    // ============ CAST token (Base mainnet) ============
+    const CAST_CONTRACT = '0x41909655593e331151cae645f132e28d531f28b2';
+    const BASE_RPC = 'https://mainnet.base.org';
+    const SELECTORS = {
+      name:        '0x06fdde03',
+      symbol:      '0x95d89b41',
+      decimals:    '0x313ce567',
+      totalSupply: '0x18160ddd',
+      balanceOf:   '0x70a08231',
+      maxSupply:   '0x32cb6b0c'
+    };
+    const tokenInfo = {
+      name: 'CastMiner',
+      symbol: 'CAST',
+      decimals: 18,
+      totalSupply: 0n,
+      maxSupply: 0n,
+      onchainBalance: 0n,
+      loaded: false
+    };
+    let balanceRefreshInterval = null;
+
+    function pad32(hexNoPrefix) {
+      return hexNoPrefix.padStart(64, '0');
+    }
+
+    function addrToCallData(addr) {
+      return pad32(addr.toLowerCase().replace(/^0x/, ''));
+    }
+
+    function decodeUint(hex) {
+      if (!hex || hex === '0x') return 0n;
+      try { return BigInt(hex); } catch { return 0n; }
+    }
+
+    function decodeString(hex) {
+      if (!hex || hex === '0x' || hex.length < 130) return '';
+      // [0x][offset:32][length:32][bytes...]
+      const lenHex = hex.slice(66, 130);
+      const len = parseInt(lenHex, 16);
+      if (!Number.isFinite(len) || len <= 0) return '';
+      const bytesHex = hex.slice(130, 130 + len * 2);
+      let out = '';
+      for (let i = 0; i < bytesHex.length; i += 2) {
+        out += String.fromCharCode(parseInt(bytesHex.slice(i, i + 2), 16));
+      }
+      return out;
+    }
+
+    function formatUnits(value, decimals) {
+      const s = value.toString().padStart(decimals + 1, '0');
+      const int = s.slice(0, s.length - decimals) || '0';
+      const frac = s.slice(s.length - decimals).replace(/0+$/, '');
+      return frac ? `${int}.${frac}` : int;
+    }
+
+    async function ethCall(to, data) {
+      // Prefer wallet provider so the call reuses chain context, fallback to public RPC
+      if (ethProvider) {
+        try {
+          return await ethProvider.request({
+            method: 'eth_call',
+            params: [{ to, data }, 'latest']
+          });
+        } catch (e) {
+          // Fallback to public RPC for read-only when wallet rejects
+        }
+      }
+      const res = await fetch(BASE_RPC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'eth_call',
+          params: [{ to, data }, 'latest']
+        })
+      });
+      const j = await res.json();
+      if (j.error) throw new Error(j.error.message || 'eth_call failed');
+      return j.result;
+    }
+
+    async function fetchTokenInfo() {
+      try {
+        const [nameHex, symbolHex, decimalsHex, totalSupplyHex, maxSupplyHex] = await Promise.all([
+          ethCall(CAST_CONTRACT, SELECTORS.name).catch(() => '0x'),
+          ethCall(CAST_CONTRACT, SELECTORS.symbol).catch(() => '0x'),
+          ethCall(CAST_CONTRACT, SELECTORS.decimals).catch(() => '0x'),
+          ethCall(CAST_CONTRACT, SELECTORS.totalSupply).catch(() => '0x'),
+          ethCall(CAST_CONTRACT, SELECTORS.maxSupply).catch(() => '0x')
+        ]);
+        const name = decodeString(nameHex);
+        const symbol = decodeString(symbolHex);
+        const decimals = Number(decodeUint(decimalsHex)) || 18;
+        tokenInfo.name = name || tokenInfo.name;
+        tokenInfo.symbol = symbol || tokenInfo.symbol;
+        tokenInfo.decimals = decimals;
+        tokenInfo.totalSupply = decodeUint(totalSupplyHex);
+        tokenInfo.maxSupply = decodeUint(maxSupplyHex);
+        tokenInfo.loaded = true;
+        return true;
+      } catch (e) {
+        console.warn('fetchTokenInfo failed:', e);
+        return false;
+      }
+    }
+
+    async function fetchOnchainBalance(addr) {
+      if (!addr) return 0n;
+      try {
+        const data = SELECTORS.balanceOf + addrToCallData(addr);
+        const hex = await ethCall(CAST_CONTRACT, data);
+        return decodeUint(hex);
+      } catch (e) {
+        console.warn('fetchOnchainBalance failed:', e);
+        return 0n;
+      }
+    }
+
+    function renderOnchainBalance() {
+      const wrap = $('onchainBalanceWrap');
+      const el = $('onchainBalance');
+      if (!userAddress) {
+        wrap.setAttribute('hidden', '');
+        return;
+      }
+      wrap.removeAttribute('hidden');
+      const formatted = formatUnits(tokenInfo.onchainBalance, tokenInfo.decimals);
+      const num = parseFloat(formatted);
+      const display = Number.isFinite(num)
+        ? num.toLocaleString('en-US', { maximumFractionDigits: 4 })
+        : '0';
+      el.textContent = `${display} ${tokenInfo.symbol}`;
+    }
+
+    async function refreshOnchainBalance() {
+      if (!userAddress) return;
+      tokenInfo.onchainBalance = await fetchOnchainBalance(userAddress);
+      renderOnchainBalance();
+    }
 
     // ============ Helpers ============
     const $ = (id) => document.getElementById(id);
@@ -1638,6 +1829,7 @@
           setTimeout(() => resetClaimBtn(), 2000);
           return;
         }
+        await refreshOnchainBalance();
       }
 
       if (earned <= 0) {
@@ -1663,6 +1855,9 @@
         renderEarned();
         renderClaim();
         renderUserRank();
+        // Refresh on-chain balance so user sees fresh data even though
+        // the simulated claim does not actually mint yet.
+        refreshOnchainBalance().catch(() => {});
 
         setTimeout(() => resetClaimBtn(), 1800);
       } catch (e) {
@@ -1712,9 +1907,18 @@
 
     // ============ Farcaster integration ============
     async function detectFarcaster() {
+      // Wait briefly for either the new miniapp-sdk or the legacy frame-sdk
+      // to attach a global, since they load asynchronously.
+      const start = Date.now();
+      while (Date.now() - start < 1500) {
+        if (window.miniappSdk || window.frame?.sdk || window.FrameSDK || window.farcaster) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
       // Method 1: SDK
       try {
-        if (window.frame && window.frame.sdk) fcSdk = window.frame.sdk;
+        if (window.miniappSdk) fcSdk = window.miniappSdk;
+        else if (window.frame && window.frame.sdk) fcSdk = window.frame.sdk;
         else if (window.FrameSDK) {
           try { fcSdk = new window.FrameSDK(); } catch (e) { /* ignore */ }
         }
@@ -1813,7 +2017,10 @@
     }
 
     function setupWalletButton() {
-      $('userWallet').addEventListener('click', connectWallet);
+      $('userWallet').addEventListener('click', async () => {
+        const ok = await connectWallet();
+        if (ok) await refreshOnchainBalance();
+      });
     }
 
     function signalFarcasterReady() {
@@ -1828,8 +2035,7 @@
       $('gateScreen').setAttribute('hidden', '');
       $('app').removeAttribute('hidden');
       renderUserBar();
-      // Try to connect wallet silently in the background
-      connectWallet().catch(() => { /* keep button visible */ });
+      renderOnchainBalance();
     }
 
     function showGate() {
@@ -1843,6 +2049,13 @@
       setTimeout(() => {
         el.style.display = 'none';
       }, 450);
+    }
+
+    function setLoadingStep(title, sub) {
+      const t = $('loadingText');
+      const s = $('loadingSubstep');
+      if (t) t.textContent = title;
+      if (s) s.textContent = sub || '';
     }
 
     // ============ Init ============
@@ -1863,15 +2076,56 @@
       renderClaim();
       renderUserRank();
 
+      // Step 1: authenticate with Farcaster
+      setLoadingStep('Authenticating with Farcaster\u2026', 'Verifying your Farcaster identity');
       const inFc = await detectFarcaster();
-      if (inFc) {
-        showApp();
-      } else {
+
+      if (!inFc) {
+        // No Farcaster context — show the gate page (still hidden behind loading first)
         showGate();
+        hideLoading();
+        startNetworkStatsAnimation();
+        return;
       }
+
+      // Step 2: auto-connect wallet (bounded by 6s so we never block forever)
+      setLoadingStep('Connecting wallet\u2026', 'Requesting access to your Base wallet');
+      try {
+        await Promise.race([
+          connectWallet(),
+          new Promise((r) => setTimeout(r, 6000))
+        ]);
+      } catch (e) {
+        // ignore — user can connect manually later
+      }
+
+      // Step 3: fetch on-chain $CAST info + user balance (bounded by 5s)
+      setLoadingStep('Loading $CAST on Base\u2026', `Reading contract ${CAST_CONTRACT.slice(0, 8)}\u2026${CAST_CONTRACT.slice(-4)}`);
+      try {
+        await Promise.race([
+          (async () => {
+            await fetchTokenInfo();
+            if (userAddress) {
+              tokenInfo.onchainBalance = await fetchOnchainBalance(userAddress);
+            }
+          })(),
+          new Promise((r) => setTimeout(r, 5000))
+        ]);
+      } catch (e) {
+        // ignore — we fall back to defaults
+      }
+
+      // Step 4: reveal app
+      setLoadingStep('Ready', 'Welcome to CastMiner');
+      showApp();
       hideLoading();
       signalFarcasterReady();
       startNetworkStatsAnimation();
+
+      // Refresh on-chain balance every 20s while the app is open
+      if (!balanceRefreshInterval) {
+        balanceRefreshInterval = setInterval(refreshOnchainBalance, 20000);
+      }
     }
 
     if (document.readyState === 'loading') {
