@@ -1,0 +1,22 @@
+# Netlify configuration
+# Pure static site — no build step. Netlify also reads _headers automatically,
+# but we keep the canonical declarations here too.
+
+[build]
+  publish = "."
+  command = ""
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "ALLOWALL"
+    Content-Security-Policy = "frame-ancestors *;"
+    Referrer-Policy = "no-referrer-when-downgrade"
+    Permissions-Policy = "clipboard-write=(self)"
+
+[[headers]]
+  for = "/.well-known/farcaster.json"
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "public, max-age=300"
+    Access-Control-Allow-Origin = "*"

@@ -1,0 +1,14 @@
+# Cloudflare Pages / Netlify shared headers
+# Allows the page to be embedded as a Farcaster Mini App frame inside Warpcast,
+# Supercast, etc., and serves the manifest with the correct Content-Type.
+
+/*
+  X-Frame-Options: ALLOWALL
+  Content-Security-Policy: frame-ancestors *;
+  Referrer-Policy: no-referrer-when-downgrade
+  Permissions-Policy: clipboard-write=(self)
+
+/.well-known/farcaster.json
+  Content-Type: application/json
+  Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *

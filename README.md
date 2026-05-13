@@ -33,18 +33,53 @@ Open <http://localhost:3000> (or whichever port your server uses).
 
 ---
 
-## Deploy to Vercel
+## Deploy
 
-1. Push this repo (it's already on GitHub).
-2. Go to <https://vercel.com/new>, import `mine-cast/castminer`.
-3. **Framework Preset**: `Other` / `Static` — no build step. Output directory: leave default (root).
-4. Deploy.
-5. After deploy, replace every occurrence of `YOUR-DOMAIN-HERE` with your Vercel domain (e.g. `castminer.vercel.app` or your custom domain) in:
-   - `.well-known/farcaster.json` — `homeUrl`, `iconUrl`, `splashImageUrl` (×2)
-   - `index.html` — `fc:frame:image` meta tag (set to your splash image URL)
-6. Add `icon.png` (200×200) and `splash.png` (1200×630) to the repo root. Redeploy.
+The repo ships **multi-host configs** so it deploys cleanly anywhere without changes:
 
-The manifest will be served at `https://<your-domain>/.well-known/farcaster.json` directly from the file at the repo root.
+| Host              | Config used                          | Free tier | Requires phone |
+|-------------------|--------------------------------------|-----------|----------------|
+| Cloudflare Pages  | `_headers`                           | yes       | no             |
+| Netlify           | `netlify.toml` + `_headers`          | yes       | no             |
+| GitHub Pages      | `.nojekyll` (headers limited)        | yes       | no             |
+| Vercel            | `vercel.json`                        | yes       | OTP via phone  |
+
+### Recommended: Cloudflare Pages (no phone needed)
+
+1. Sign up: <https://dash.cloudflare.com/sign-up> — email only, no OTP.
+2. Workers & Pages → **Create application** → **Pages** → **Connect to Git**.
+3. Authorize Cloudflare to access GitHub → select `mine-cast/castminer`.
+4. Set up build:
+   - **Production branch**: `devin/1778691247-castminer-app` (or `main` after you merge)
+   - **Framework preset**: `None`
+   - **Build command**: *(empty)*
+   - **Build output directory**: `/` (or leave default)
+5. **Save and Deploy**. You'll get a URL like `castminer.pages.dev`.
+6. **Substitute the domain** — replace every occurrence of `YOUR-DOMAIN-HERE` with your real Cloudflare Pages domain (or custom domain) in:
+   - `.well-known/farcaster.json` — `homeUrl`, `iconUrl`, `splashImageUrl`, and inside `frame.{...}` (4 total)
+   - `index.html` — the `fc:frame:image` meta tag (use your splash image URL)
+   - Commit + push → Cloudflare auto-redeploys.
+7. **Add assets** — drop `icon.png` (200×200) and `splash.png` (1200×630) at the repo root, push.
+
+### Netlify
+
+1. Sign up: <https://app.netlify.com/signup> → **Sign up with GitHub** (no phone OTP).
+2. **Add new site** → **Import an existing project** → GitHub → select `mine-cast/castminer`.
+3. Build settings: leave **Build command** empty, **Publish directory** `.` (root). Click **Deploy**.
+4. Same domain-substitution + asset steps as above.
+
+### GitHub Pages
+
+1. Repo → **Settings** → **Pages** → **Build and deployment** → Source: **Deploy from a branch**.
+2. Branch: `devin/1778691247-castminer-app` (or `main`) → folder `/ (root)` → **Save**.
+3. URL: `https://mine-cast.github.io/castminer/`.
+4. Same domain-substitution + asset steps. (Note: GH Pages does not honor `_headers` — the page works, but iframe-embed headers fall back to GitHub defaults. Should be fine for Warpcast Frame Playground.)
+
+### Vercel
+
+Uses `vercel.json` (already in repo). Same flow as above, but Vercel requires a phone OTP at signup.
+
+The manifest is served at `https://<your-domain>/.well-known/farcaster.json` directly from the file at the repo root.
 
 ---
 
@@ -64,7 +99,11 @@ castminer/
 ├── index.html                          # Single-file app (HTML + CSS + JS)
 ├── .well-known/
 │   └── farcaster.json                  # Mini App manifest (served at /.well-known/farcaster.json)
-├── vercel.json                         # Frame-friendly headers (no rewrite needed)
+├── _headers                            # Cloudflare Pages / Netlify headers
+├── netlify.toml                        # Netlify build + headers config
+├── .nojekyll                           # Disable Jekyll on GitHub Pages
+├── vercel.json                         # Vercel headers (optional, if you use Vercel)
+├── CASTMINER-PROJECT.md                # Full spec from project doc
 ├── README.md
 └── .gitignore
 ```
